@@ -1,13 +1,17 @@
 package com.example.barcodescanner
 
 import android.content.ActivityNotFoundException
+import android.content.ContentValues
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.ActivityCompat
 import com.example.barcodescanner.databinding.ActivityMainBinding
 import kotlinx.coroutines.*
 import org.json.JSONObject
@@ -19,6 +23,15 @@ import java.net.URL
 
 class MainActivity : AppCompatActivity() {
 
+    companion object{
+        val COLUMN_ID = "_id"
+        val COLUMN_QUANTITY = "quantity"
+        val COLUMN_PRODUCT = "product"
+        val COLUMN_IS_SELECTED = "selected"
+
+        val CONTENT_URI = Uri.parse("content://com.example.shoppinglist.ShoppingMemoContentProvider/shopping_list")
+    }
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var activityResultLauncher: ActivityResultLauncher<Intent>
     val TAG = "MainActivity"
@@ -27,6 +40,21 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        binding.btnScan.isEnabled = false
+
+        if(ActivityCompat.checkSelfPermission(
+                this,
+                "com.example.shoppinglist.permissions.USE_SHOPPINGLIST"
+        ) != PackageManager.PERMISSION_GRANTED){
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf("com.example.shoppinglist.permissions.USE_SHOPPINGLIST"),
+                123
+            )
+        }else{
+            enableButton()
+        }
 
         binding.btnScan.setOnClickListener {
             val intent = Intent("com.google.zxing.client.android.SCAN")
@@ -51,9 +79,29 @@ class MainActivity : AppCompatActivity() {
                         }
 
                         binding.tvResult.text = text.await()
+                        val values = ContentValues().apply {
+                            put(COLUMN_QUANTITY,1)
+                            put(COLUMN_PRODUCT, binding.tvResult.text.toString())
+                        }
+                        contentResolver.insert(CONTENT_URI,values)
                     }
                 }
             }
+    }
+
+    private fun enableButton(){
+        binding.btnScan.isEnabled = true
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if(requestCode==123 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED){
+            enableButton()
+        }
     }
 
     private suspend fun getProduct(scanResult: String): String {
